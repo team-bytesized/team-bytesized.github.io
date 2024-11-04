@@ -85,3 +85,24 @@ a {
     padding: 2px 4px; /* Optional: adds some padding */
     border-radius: 3px; /* Optional: rounds the corners */
 }
+
+.centered-image {
+    display: block;
+    margin: 0 auto;
+    width: 80%; /* Adjust the width as needed */
+    border: 5px solid #000; /* Example border color */
+    filter: url('#pixelated'); /* Assuming you have a pixelated filter defined */
+}
+
+/* New pixelated filter class */
+.pixelated {
+    image-rendering: pixelated; /* Ensures pixelated rendering */
+    image-rendering: -moz-crisp-edges; /* Firefox */
+    image-rendering: -o-crisp-edges; /* Opera */
+    image-rendering: crisp-edges; /* Non-standard */
+    image-rendering: -webkit-optimize-contrast; /* Webkit */
+}
+
+.centered-text {
+    text-align: center;
+}
