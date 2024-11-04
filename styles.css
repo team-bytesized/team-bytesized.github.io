@@ -78,3 +78,10 @@ a {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     margin-left: 10px;
 }
+
+.challenge {
+    background-color: #333; /* Dark grey background */
+    color: #EAB8E4; /* Light pastel purple text */
+    padding: 2px 4px; /* Optional: adds some padding */
+    border-radius: 3px; /* Optional: rounds the corners */
+}

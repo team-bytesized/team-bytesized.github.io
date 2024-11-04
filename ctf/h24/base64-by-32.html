@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTF Challenge Template</title>
+    <link rel="stylesheet" href="../../styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Day 1, Challenge 4: Base64 by 32</h1>
+        <nav>
+            <ul>
+                <li><a href="../../index.html">Home</a></li>
+                <li><a href="../ctf.html">CTF</a></li>
+                <li><a href="../../projects/projects.html">Projects</a></li>
+            </ul>
+        </nav>
+    </header>
+    <article>
+        <h2>Challenge Name: Base64by32</h2>
+        <p>Category: Scripting</p>
+        <p>Author: @JohnHammond</p>
+
+        <h3>Challenge Description:</h3>
+        <p>This is a dumb challenge. I'm sorry.</p>
+
+        <h3>Artifact Files:</h3>
+        <ul>
+            <li><a href="h24_files/Base64by32/base64by32.zip">base64by32.zip</a></li>
+        </ul>
+
+        <h3>Approach</h3>
+        <p>After unzipping the archive, we can see that there's a large amount of base64 encoded data in the <code>base64by32</code> file. We can write a script to decode it. Looking at the name of the challenge, we can infer that the flag is encoded 32 times, so we can write a loop to decode it 32 times and grab the flag.</p>
+        <pre><code class="language-python">
+import base64
+with open("base64by32", "rb") as file:
+    data = file.read()
+for i in range(32):
+    data = base64.b64decode(data)
+print(data)
+        </code></pre>
+        <p>Flag:<code class="challenge">flag{8b3980f3d33f2ad2f531f5365d0e3970}</code></p>
+        <h3>Reflections</h3>
+        <p>This was a fun warmup challenge, short and sweet :) </p>
+    </article>
+</body>
+</html>
