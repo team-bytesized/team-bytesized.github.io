@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Huntress 2024 Writeups</title>
+    <link rel="stylesheet" href="../../styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Huntress CTF 2024: Ocean Locust</h1>
+        <nav>
+            <ul>
+                <li><a href="../../index.html">Home</a></li>
+                <li><a href="../ctf.html">CTF</a></li>
+                <li><a href="../../projects/projects.html">Projects</a></li>
+            </ul>
+        </nav>
+    </header>
+    <article>
+        <h2>Challenge Name: ocean_locust</h2>
+        <p>Category: Malware</p>
+        <p>Author: @JohnHammond</p>
+
+        <h3>Challenge Description:</h3>
+        <p><b>Wow-ee zow-ee!!</b> Some advanced persistent threats have been doing some tricks with hiding payloads in image files!</p>
+
+        <h3>Artifact Files:</h3>
+        <ul>
+            <li><a href="../../h24_files/OceanLocust/ocean_locust.7z">ocean_locust.7z</a></li>
+        </ul>
+
+        <h3>Approach</h3>
+        <p>After unzipping the archive, we are presented with two executables and an image file, "inconspicuous.png".</p>
+        <img src="../../h24_files/OceanLocust/inconspicuous.png" alt="Inconspicuous Image">
+        <p>I started by running both executables and noted that the binaries are written in rust, and that they both required an image and flag as input. Because I have no clue how to reverse rust, I decided to take a look at the image file.</p>
+        <img src="../../h24_files/OceanLocust/first-run.png" alt="Image for Question 1">
+        <p>I took a look at the png image in 010 editor, and noticed a handful of ancillary data chunks, with types "biTa" through "biTh". These chunks all contained 5 bytes of data, which made me think that they were XORed, with the key being the name of the chunk. </p>
+        <img src="../../h24_files/OceanLocust/png-chunks.png" alt="PNG Chunks">
+        <p>I decided to test my theory by decoding the first chunk in alphabetical order, XORing them against the chunk name, and was pleased to see that the first few characters of the flag were revealed.</p>
+        <p>I did this using binary refinery, emitting the bytes, carving out the hex structure for the biTa chunk, and then XORing it against "biTa".</p>
+        <img src="../../h24_files/OceanLocust/test-xor.png" alt="Chunk Decoding">
+        <p>I wrote a script to automate the process of decoding the chunks, and after a few iterations, the flag was revealed. </p>
+        <pre><code class="language-python">
+import struct
+
+def parse(data):
+    decoded_data = b""
+    for letter in range(ord("a"), ord("h") + 1):  # biTa to biTh
+        chunk_name = f"biT{chr(letter)}".encode()
+        if chunk_name in data:
+            start_index = data.index(chunk_name) + len(chunk_name)
+            additional_data = data[start_index : start_index + 6]
+            unpacked_data = struct.unpack("6B", additional_data)
+            decoded_data += bytes(
+                a ^ b for a, b in zip(unpacked_data[:5], [*chunk_name, chunk_name[0]])
+            )
+    print(decoded_data.strip(b"\xaa").decode())  # some padding bytes at the end
+
+
+parse(open("inconspicuous.png", "rb").read())   
+        </code></pre>
+        <p>Flag:<code class="challenge">flag{fec87c690b8ec8d65b8bb10ee7bb65d0}</code></p>
+        <h3>Reflections</h3>
+        <p>This was a fun warmup challenge, short and sweet :) </p>
+    </article>
+</body>
+</html>

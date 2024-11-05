@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Huntress CTF Writeups</title>
+    <title>Huntress 2024 Writeups</title>
     <link rel="stylesheet" href="../../styles.css">
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism.min.css">
@@ -12,7 +12,7 @@
 </head>
 <body>
     <header>
-        <h1>Huntress CTF 2024: Base64by32</h1>
+        <h1>Huntress CTF 2024: Unbelievable</h1>
         <nav>
             <ul>
                 <li><a href="../../index.html">Home</a></li>
@@ -22,29 +22,24 @@
         </nav>
     </header>
     <article>
-        <h2>Challenge Name: Base64by32</h2>
-        <p>Category: Scripting</p>
+        <h2>Challenge Name: Unbelievable</h2>
+        <p>Category: warmups</p>
         <p>Author: @JohnHammond</p>
 
         <h3>Challenge Description:</h3>
-        <p>This is a dumb challenge. I'm sorry.</p>
+        <p>Don't believe everything you see on the Internet!</p>
+        <p>Anyway, have you heard this intro soundtrack from Half-Life 3?  </p>
 
         <h3>Artifact Files:</h3>
         <ul>
-            <li><a href="../../h24_files/Base64by32/base64by32.zip">base64by32.zip</a></li>
+            <li><a href="../../h24_files/Unbelievable/Half-Life_3_OST.mp3">Half-Life_3_OST.mp3</a></li>
         </ul>
 
         <h3>Approach</h3>
-        <p>After unzipping the archive, we can see that there's a large amount of base64 encoded data in the <code>base64by32</code> file. We can write a script to decode it. Looking at the name of the challenge, we can infer that the flag is encoded 32 times, so we can write a loop to decode it 32 times and grab the flag.</p>
-        <pre><code class="language-python">
-import base64
-with open("base64by32", "rb") as file:
-    data = file.read()
-for i in range(32):
-    data = base64.b64decode(data)
-print(data)
-        </code></pre>
-        <p>Flag:<code class="challenge">flag{8b3980f3d33f2ad2f531f5365d0e3970}</code></p>
+        <p>As said in the challenge description, don't believe everything you see on the Internet! This is actually not an mp3 file, running <code>file</code> on <code>Half-Life_3_OST.mp3</code> will confirm this is a PNG image.</p>
+        <p>We can simply view the image to grab the flag.</p>
+        <img src="../../h24_files/Unbelievable/Half-Life_3_OST.mp3" alt="Half-Life 3 OST (you can embed the mp3 lol)">
+        <p>Flag:<code class="challenge">flag{a85466991f0a8dc3d9837a5c32fa0c91}</code></p>
         <h3>Reflections</h3>
         <p>This was a fun warmup challenge, short and sweet :) </p>
     </article>
