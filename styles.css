@@ -106,3 +106,11 @@ a {
 .centered-text {
     text-align: center;
 }
+
+/* Add this CSS to ensure images are responsive */
+article img {
+    max-width: 100%;
+    height: auto;
+    display: block; /* Ensures images are block elements */
+    margin: 0 auto; /* Centers images */
+}

@@ -41,7 +41,7 @@
         <img src="../../h24_files/OceanLocust/first-run.png" alt="Image for Question 1">
         <p>I took a look at the png image in 010 editor, and noticed a handful of ancillary data chunks, with types "biTa" through "biTh". These chunks all contained 5 bytes of data, which made me think that they were XORed, with the key being the name of the chunk. </p>
         <img src="../../h24_files/OceanLocust/png-chunks.png" alt="PNG Chunks">
-        <p>I decided to test my theory by decoding the first chunk in alphabetical order, XORing them against the chunk name, and was pleased to see that the first few characters of the flag were revealed.</p>
+        <p>I decided to test my theory by decoding the first chunk in alphabetical order, XORing its data against the chunk type "biT[letter]", and was pleased to see that the first few characters of the flag were revealed.</p>
         <p>I did this using binary refinery, emitting the bytes, carving out the hex structure for the biTa chunk, and then XORing it against "biTa".</p>
         <img src="../../h24_files/OceanLocust/test-xor.png" alt="Chunk Decoding">
         <p>I wrote a script to automate the process of decoding the chunks, and after a few iterations, the flag was revealed. </p>
