@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IrisCTF 2025 Writeups - Tracem 1</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>IrisCTF 2025: Tracem 1</h1>
+        <nav>
+            <ul>
+                <li><a href="/index.html">Home</a></li>
+                <li><a href="/ctf/ctf.html">CTF</a></li>
+                <li><a href="/projects/projects.html">Projects</a></li>
+                <li><a href="/articles/articles.html">Articles</a></li>
+            </ul>
+        </nav>
+    </header>
+    <article>
+        <h2>Challenge Name: Tracem 1</h2>
+        <p>Category: Forensics</p>
+        <p>Author: @Skat</p>
+
+        <h3>Challenge Description:</h3>
+        <p>Here at EI Corp, ethics are our top priority! That's why our IT team was shocked when we got a knock from our ISP informing us that someone on our computer network was involved in some illegitimate activity. Who would do that? Don't they know that's illegal?</p>
+        <p>Our ISP's knocking (and so is HR), and we need someone to hold accountable. Can you find out who committed this violation?</p>
+        <p>Flag format: <code>irisctf{username}</code> (e.g. <code>irisctf{jdoe}</code>). Usernames are case-sensitive.</p>
+
+        <h3>Artifact Files:</h3>
+        <ul>
+            <li><a href="/ctf/iris2025/files/tracem-1.zip">tracem-1.zip</a></li>
+        </ul>
+
+        <h3>Logs Analysis:</h3>
+        <p>The logs we're given from this format look like RADIUS server logs. We see DHCP and DNS stream traffic as well as user authentications and disconnects - as we get DHCP streams, we can check DHCPREQUEST and DHCPACK messages to confirm users by MAC address.</p>
+        <p>While there are more elegant solutions to transforming these logs into a more readable format, such as PowerBI, the logs total to less than <1 GB, so I took a more minimal approach and used a mixture of Notepad++ / VSCode and some common unix CLI tools (grep, primarily).</p>
+        <p>Getting started, I took a look at DNS query records, example below:</p>
+        <pre><code class="language-json">{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 04:19:56.50", "data": {"timestamp": "2024-12-04 04:19:56.051801", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.33.91.199", "src_port": 11119, "dest_ip": "10.33.0.2", "dest_port": 53, "transaction_id": 45865, "queries": [{"type": "A", "class": "IN", "name": "unsplash.com"}]}}</code></pre>
+        <p>As we're tasked with finding illegitimate / illicit activity, it's useful to identify all domains queried in the logs - we can do this nicely with a one-liner:</p>
+        <p><code class="language-bash">grep -oP 'queries.*name": "\K[^"]*' logs.json | sort -u > query_domains.txt</code></p>
+        <p>Looking at <code>query_domains.txt</code>, we can see a quite... interesting... domain being queried</p>
+        <img src="/ctf/iris2025/images/tracem-1-img-1.png" alt="Interesting Domain">
+        <p>We check for records querying that domain, and get a hit for <code>10.33.18.209</code></p>
+        <img src="/ctf/iris2025/images/tracem-1-img-2.png" alt="Hit for IP Address">
+        <p>Now that we have an identifier for the bad actor, let's enumerate and find their username :)</p>
+        <p>We can check these DHCP logs for requested / assigned IP addresses to find the MAC address, which will allow us to find the user ID contained in authentication success/failure records - however, this is a slight rabbithole, which I'll elaborate on further into the writeup.</p>
+        <p>Grepping through the logs filtering for that IP address, we can see <code>DHCPREQUEST</code> records like this:</p>
+        <div class="scrollable-log">
+            <pre><code class="language-json">{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 08:09:37.15", "data": {"timestamp": "2024-12-04 08:09:36.181964", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "83:eb:28:cc:85:62", "src_ip": "0.0.0.0", "src_port": 68, "dest_mac": "FF:FF:FF:FF:FF:FF", "dest_ip": "255.255.255.255", "dest_port": 67, "chaddr": "83:eb:28:cc:85:62", "ciaddr": "0.0.0.0", "transaction_id": 3367428394, "opcode": "DHCPREQUEST", "riaddr": "10.33.18.209"}}</code></pre>
+        </div>
+        <p>In the above record, <code>chaddr</code> / <code>src_mac</code> is the MAC address of the device requesting an IP assignment from the DHCP server, and <code>riaddr</code> is the IP address being requested. We see this confirmed with a <code>DHCPACK</code> record directly following the <code>DHCPREQUEST</code> record:</p>
+        <div class="scrollable-log">
+            <pre><code class="language-json">{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 08:09:37.18", "data": {"timestamp": "2024-12-04 08:09:36.216303", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "7A:25:C4:8F:AF:75", "src_ip": "10.33.0.2", "src_port": 67, "dest_mac": "83:eb:28:cc:85:62", "dest_ip": "10.33.18.209", "dest_port": 68, "chaddr": "83:eb:28:cc:85:62", "ciaddr": "10.33.18.209", "transaction_id": 3367428394, "opcode": "DHCPACK"}}</code></pre>
+        </div>
+        <p>In this record, <code>dest_ip</code> / <code>ciaddr</code> is the IP address of the device which was assigned a DHCP IP address by the server. You can confirm this as the same transaction as the <code>transaction_id</code> is the same between both records.</p>
+        <p>Thankfully, in this case, the DHCP logs during the captured time period indicate only the device <code>83:eb:28:cc:85:62</code> was assigned the IP address <code>10.33.18.209</code>, which makes it easier to identify the user.</p>
+        <p>Grepping through the logs yet again, we can identify the user...</p>
+        <img src="/ctf/iris2025/images/tracem-1-img-3.png" alt="Identifying User">
+        <p>Bingo!</p>
+        <p>But... the flag format isn't numeric - so this isn't the valid flag (I tried).</p>
+        <p>In fact, we won't really be using the numeric user ID to identify the user at all! However, if we avoid rabbit-holing into this ID, we'll discover some interesting SSO URIs in these logs...</p>
+        <p>Take the following log as an example:</p>
+        <div class="scrollable-log">
+            <pre><code class="language-json">{"host": "primary", "source": "udp:514", "sourcetype": "syslog", "_time": "2024-12-04 11:41:48.81", "data": {"_raw": "2024-12-04 11:41:47.212415||https://sso.evil-insurance.corp/idp/profile/SAML2/Redirect/SSO|/idp/profile/SAML2/Redirect/SSO|2f8b72151c253d5be53c202f9035fd75|authn/MFA|10.17.6.18|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3 Edge/16.16299|https://sso.evil-insurance.corp/ns/profiles/saml2/sso/browser|mluna||uid|it.evil-insurance.corp|https://sso.evil-insurance.corp/idp/sso|url:oasis:names:tc:SAML:2.0:protocol|urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect|urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST|vp3+2cf/kLPoW5LgTubXfPoh1++zv/z25nYnQQOsXYjhuNvjWb41JlkdztnhtRNg0no8SOGq4G0U11e3LWEW1w==|urn:oasis:names:tc:SAML:2.0:nameid-format:transient|_fcd29bb8747ef721e558d17171bc27e0|2024-12-04 11:41:47.212415|_bc93702e-b2a1-406e-8d79-4da019dda071||||urn:oasis:names:tc:SAML:2.0:status:Success|||false|false|true", "timestamp": "2024-12-04 11:41:47.212415", "z25nYnQQOsXYjhuNvjWb41JlkdztnhtRNg0no8SOGq4G0U11e3LWEW1w": "=|urn:oasis:names:tc:SAML:2.0:nameid-format:transient|_fcd29bb8747ef721e558d17171bc27e0|2024-12-04"}}</code></pre>
+        </div>
+        <p>This SSO URI contains some important information we can use to pivot from the information we already have - it contains the IP address, user agent, and most importantly... a human-readable username!</p>
+        <p>And after putting together a quick grep one-liner...</p>
+        <img src="/ctf/iris2025/images/tracem-1-img-4.png" alt="Finding the Flag">
+        <p>We found the flag! <code>irisctf{llloyd}</code></p>
+        <p>This was a fun challenge, and a great intro to log analysis!</p>
+    </article>
+</body>
+</html>

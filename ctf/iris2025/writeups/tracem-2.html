@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IrisCTF 2025 Writeups - Tracem 2</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>IrisCTF 2025: Tracem 2</h1>
+        <nav>
+            <ul>
+                <li><a href="/index.html">Home</a></li>
+                <li><a href="/ctf/ctf.html">CTF</a></li>
+                <li><a href="/projects/projects.html">Projects</a></li>
+                <li><a href="/articles/articles.html">Articles</a></li>
+            </ul>
+        </nav>
+    </header>
+    <article>
+        <h2>Challenge Name: Tracem 2</h2>
+        <p>Category: Forensics</p>
+        <p>Author: @Skat</p>
+
+        <h3>Challenge Description:</h3>
+        <p>Another knock from our ISP and HR looking for a John Doe... but now it's not so easy.</p>
+        <p>Flag format: <code>irisctf{username}</code> (e.g. <code>irisctf{jdoe}</code>). Usernames are case-sensitive.</p>
+
+        <h3>Artifact Files:</h3>
+        <ul>
+            <li><a href="/ctf/iris2025/files/tracem-2.tar.gz">tracem-2.tar.gz</a></li>
+        </ul>
+
+        <h3>Logs Analysis:</h3>
+        <p>More RADIUS logs! As before, we see DHCP and DNS stream traffic as well as user authentications and disconnects - except this time, the challenge requires some lateral thinking to solve!</p>
+        <p>Like last time, I took a more minimal approach and just went with my IDE of choice and some grep and regex magic :)</p>
+
+        <p>As always when starting log analysis, I get a unique list of URIs requested to identify traffic with interesting domains:</p>
+        <pre><code class="language-bash">grep -oP 'queries.*"name":\s"\K[^"]*' logs.json | sort -u > query_domains.txt</code></pre>
+        <p>Output:</p>
+        <img src="/ctf/iris2025/images/tracem-2-img-1.png" alt="Output Image 1">
+
+        <p>After looking through the output, I noticed some bad domains:</p>
+        <img src="/ctf/iris2025/images/tracem-2-img-2.png" alt="Output Image 2">
+
+        <p>Following the same strategy as Tracem 1, I look for all traffic requesting these domains:</p>
+        <pre><code class="language-bash">grep -iE "queries.*(piratebay|generic-illicit)" logs.json</code></pre>
+        <p>Output:</p>
+        <div class="scrollable-log">
+        <pre><code class="language-json">{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 08:51:51.12", "data": {"timestamp": "2024-12-04 08:51:51.092921", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.18.21.121", "src_port": 48851, "dest_ip": "10.18.0.2", "dest_port": 53, "transaction_id": 119, "queries": [{"type": "A", "class": "IN", "name": "thepiratebay.org"}]}}
+{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 08:51:51.13", "data": {"timestamp": "2024-12-04 08:51:51.102210", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.18.21.121", "src_port": 2975, "dest_ip": "10.18.0.2", "dest_port": 53, "transaction_id": 13007, "queries": [{"type": "AAAA", "class": "IN", "name": "thepiratebay.org"}]}}
+{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 09:05:01.12", "data": {"timestamp": "2024-12-04 09:05:00.400067", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.18.21.121", "src_port": 22066, "dest_ip": "10.18.0.2", "dest_port": 53, "transaction_id": 2835, "queries": [{"type": "A", "class": "IN", "name": "generic-illicit-activities-hub.org"}]}}
+{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 09:05:00.70", "data": {"timestamp": "2024-12-04 09:05:00.520979", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.18.21.121", "src_port": 64559, "dest_ip": "10.18.0.2", "dest_port": 53, "transaction_id": 3019, "queries": [{"type": "AAAA", "class": "IN", "name": "generic-illicit-activities-hub.org"}]}}</code></pre>
+        </div>
+        <p>Seeing that the only IP requesting those is <code>10.18.21.121</code>, I check for DHCP assignments:</p>
+        <pre><code class="language-bash">grep -iE "10.18.21.121.*(DHCPACK|DHCPREQUEST|DHCPRELEASE)" logs.json</code></pre>
+        <p>Output:</p>
+        <div class="scrollable-log">
+        <pre><code class="language-json">{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 08:49:21.00", "data": {"timestamp": "2024-12-04 08:49:20.982612", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "EB:A8:B3:FB:A0:AB", "src_ip": "10.18.0.2", "src_port": 67, "dest_mac": "de:ad:be:ef:ca:fe", "dest_ip": "10.18.21.121", "dest_port": 68, "chaddr": "de:ad:be:ef:ca:fe", "ciaddr": "10.18.21.121", "transaction_id": 1005317175, "opcode": "DHCPACK"}}
+{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 09:22:01.12", "data": {"timestamp": "2024-12-04 09:22:00.411200", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "de:ad:be:ef:ca:fe", "src_ip": "10.18.21.121", "src_port": 68, "dest_mac": "FF:FF:FF:FF:FF:FF", "dest_ip": "255.255.255.255", "dest_port": 67, "chaddr": "de:ad:be:ef:ca:fe", "ciaddr": "0.0.0.0", "transaction_id": 2674233379, "opcode": "DHCPRELEASE"}}
+{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 09:22:01.15", "data": {"timestamp": "2024-12-04 09:22:00.519792", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "EB:A8:B3:FB:A0:AB", "src_ip": "10.18.0.2", "src_port": 67, "dest_mac": "de:ad:be:ef:ca:fe", "dest_ip": "10.18.21.121", "dest_port": 68, "chaddr": "de:ad:be:ef:ca:fe", "ciaddr": "10.18.21.121", "transaction_id": 2674233379, "opcode": "DHCPACK"}}</code></pre>
+        </div>
+        <p>Looking at this activity, we can see that this IP address is assigned to (likely spoofed) MAC address <code>de:ad:be:ef:ca:fe</code> - lovely nod to <a href="https://en.wikipedia.org/wiki/Magic_number_(programming)#DEADBEEF">DEADBEEF</a> and <a href="https://en.wikipedia.org/wiki/Magic_number_(programming)#DEADCAFE">DEADCAFE</a> :)</p>
+
+        <p>Now, this is where the challenge requires some lateral thinking. This IP address is not included in any SAML / SSO URIs containing a username, and in fact, we see no reassignments or reusage of this <code>de:ad:be:ef:ca:fe</code> MAC address anywhere in the logs...</p>
+        <pre><code class="language-bash">grep -iE "de:ad:be:ef:ca:fe" logs.json</code></pre>
+        <p>Output:</p>
+        <div class="scrollable-log">
+        <pre><code class="language-json">{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 08:49:20.52", "data": {"timestamp": "2024-12-04 08:49:20.310176", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "de:ad:be:ef:ca:fe", "src_ip": "0.0.0.0", "src_port": 68, "dest_mac": "FF:FF:FF:FF:FF:FF", "dest_ip": "255.255.255.255", "dest_port": 67, "chaddr": "de:ad:be:ef:ca:fe", "ciaddr": "0.0.0.0", "transaction_id": 1005317175, "opcode": "DHCPREQUEST", "riaddr": "10.18.21.121"}}
+{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 08:49:21.00", "data": {"timestamp": "2024-12-04 08:49:20.982612", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "EB:A8:B3:FB:A0:AB", "src_ip": "10.18.0.2", "src_port": 67, "dest_mac": "de:ad:be:ef:ca:fe", "dest_ip": "10.18.21.121", "dest_port": 68, "chaddr": "de:ad:be:ef:ca:fe", "ciaddr": "10.18.21.121", "transaction_id": 1005317175, "opcode": "DHCPACK"}}
+{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 09:22:01.12", "data": {"timestamp": "2024-12-04 09:22:00.411200", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "de:ad:be:ef:ca:fe", "src_ip": "10.18.21.121", "src_port": 68, "dest_mac": "FF:FF:FF:FF:FF:FF", "dest_ip": "255.255.255.255", "dest_port": 67, "chaddr": "de:ad:be:ef:ca:fe", "ciaddr": "0.0.0.0", "transaction_id": 2674233379, "opcode": "DHCPRELEASE"}}
+{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 09:22:01.15", "data": {"timestamp": "2024-12-04 09:22:00.519792", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "EB:A8:B3:FB:A0:AB", "src_ip": "10.18.0.2", "src_port": 67, "dest_mac": "de:ad:be:ef:ca:fe", "dest_ip": "10.18.21.121", "dest_port": 68, "chaddr": "de:ad:be:ef:ca:fe", "ciaddr": "10.18.21.121", "transaction_id": 2674233379, "opcode": "DHCPACK"}}</code></pre>
+        </div>
+
+        <p>So, to organize the evidence we have so far, I made a table of these DHCP events - as forensic analysts, tables are our best friend :)</p>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Event</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>2024-12-04 08:49:20.52</td>
+                    <td><code>de:ad:be:ef:ca:fe</code> first requests IP assignment</td>
+                    <td>requests <code>10.18.21.121</code></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 08:49:20.982612</td>
+                    <td>first IP assignment to <code>de:ad:be:ef:ca:fe</code></td>
+                    <td>assigned <code>10.18.21.121</code></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 09:22:00.411200</td>
+                    <td><code>de:ad:be:ef:ca:fe</code> releases IP <code>10.18.21.121</code></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 09:22:00.519792</td>
+                    <td>last IP assignment to <code>de:ad:be:ef:ca:fe</code></td>
+                    <td>assigned <code>10.18.21.121</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p>Now we grep for queried domains by the <code>10.18.21.121</code> IP address, extract the domain, and add to the table:</p>
+        <pre><code class="language-bash">grep -oP '.*10.18.21.121.*queries.*' logs.json > 10-18-21-121_queries.txt</code></pre>
+        <p>Output:</p>
+        <div class="scrollable-log">
+        <pre><code class="language-json">{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 08:49:34.58", "data": {"timestamp": "2024-12-04 08:49:33.772810", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.18.21.121", "src_port": 42110, "dest_ip": "10.18.0.2", "dest_port": 53, "transaction_id": 61288, "queries": [{"type": "A", "class": "IN", "name": "www.google.com"}]}}
+{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 08:49:34.58", "data": {"timestamp": "2024-12-04 08:49:33.780002", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.18.21.121", "src_port": 12733, "dest_ip": "10.18.0.2", "dest_port": 53, "transaction_id": 25258, "queries": [{"type": "AAAA", "class": "IN", "name": "www.google.com"}]}}
+{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 08:51:18.72", "data": {"timestamp": "2024-12-04 08:51:17.829209", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.18.21.121", "src_port": 18183, "dest_ip": "10.18.0.2", "dest_port": 53, "transaction_id": 6754, "queries": [{"type": "A", "class": "IN", "name": "2.arch.pool.ntp.org"}]}}
+{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 08:51:18.73", "data": {"timestamp": "2024-12-04 08:51:17.830022", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.18.21.121", "src_port": 4232, "dest_ip": "10.18.0.2", "dest_port": 53, "transaction_id": 34487, "queries": [{"type": "AAAA", "class": "IN", "name": "2.arch.pool.ntp.org"}]}}
+{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 08:51:51.12", "data": {"timestamp": "2024-12-04 08:51:51.092921", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.18.21.121", "src_port": 48851, "dest_ip": "10.18.0.2", "dest_port": 53, "transaction_id": 119, "queries": [{"type": "A", "class": "IN", "name": "thepiratebay.org"}]}}
+{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 08:51:51.13", "data": {"timestamp": "2024-12-04 08:51:51.102210", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.18.21.121", "src_port": 2975, "dest_ip": "10.18.0.2", "dest_port": 53, "transaction_id": 13007, "queries": [{"type": "AAAA", "class": "IN", "name": "thepiratebay.org"}]}}
+{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 09:05:01.12", "data": {"timestamp": "2024-12-04 09:05:00.400067", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.18.21.121", "src_port": 22066, "dest_ip": "10.18.0.2", "dest_port": 53, "transaction_id": 2835, "queries": [{"type": "A", "class": "IN", "name": "generic-illicit-activities-hub.org"}]}}
+{"host": "primary", "source": "stream:dns", "sourcetype": "stream:dns", "_time": "2024-12-04 09:05:00.70", "data": {"timestamp": "2024-12-04 09:05:00.520979", "protocol_stack": "ip:udp:dns", "transport": "udp", "src_ip": "10.18.21.121", "src_port": 64559, "dest_ip": "10.18.0.2", "dest_port": 53, "transaction_id": 3019, "queries": [{"type": "AAAA", "class": "IN", "name": "generic-illicit-activities-hub.org"}]}}</code></pre>
+        </div>
+        <p>Putting into a table:</p>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Event</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>2024-12-04 08:49:20.52</td>
+                    <td><code>de:ad:be:ef:ca:fe</code> first requests IP assignment</td>
+                    <td>requests <code>10.18.21.121</code></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 08:49:20.982612</td>
+                    <td>first IP assignment to <code>de:ad:be:ef:ca:fe</code></td>
+                    <td>assigned <code>10.18.21.121</code></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 08:49:34.58</td>
+                    <td><code>10.18.21.121</code> requests <code>www.google.com</code></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 08:51:18.72</td>
+                    <td><code>10.18.21.121</code> requests <code>2.arch.pool.ntp.org</code></td>
+                    <td>device runs Arch!</td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 08:51:51.12</td>
+                    <td><code>10.18.21.121</code> requests <code>thepiratebay.org</code></td>
+                    <td>illicit domain</td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 09:05:01.12</td>
+                    <td><code>10.18.21.121</code> requests <code>generic-illicit-activities-hub.org</code></td>
+                    <td>illicit domain</td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 09:22:00.411200</td>
+                    <td><code>de:ad:be:ef:ca:fe</code> releases IP <code>10.18.21.121</code></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 09:22:00.519792</td>
+                    <td>last IP assignment to <code>de:ad:be:ef:ca:fe</code></td>
+                    <td>assigned <code>10.18.21.121</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p>Nice! We can see that the device in question is running Arch!</p>
+        <img src="/ctf/iris2025/images/tracem-2-arch-fedora.gif" alt="Arch Fedora GIF">
+
+        <p>My next step will be to grab all unique IPs contacting that Arch NTP domain:</p>
+        <pre><code class="language-bash">grep -iE 'queries.*2.arch.pool.ntp.org' logs.json | grep -oP '"src_ip":\s"\K[^"]*' | sort -u</code></pre>
+        <p>Output:</p>
+        <div class="scrollable-log">
+        <pre><code class="language-bash">10.17.161.10
+10.17.171.253
+10.17.26.247
+10.17.6.47
+10.17.90.14
+10.18.21.121
+10.34.192.28
+10.35.126.228
+10.49.220.32
+10.49.65.21
+10.49.79.62
+10.50.103.29
+10.50.184.143
+10.51.64.145
+10.65.228.127
+10.65.26.90
+10.65.68.160
+10.66.156.255
+10.66.68.75
+10.66.91.95
+10.67.252.116</code></pre>
+        </div>
+        <p>Now, I'll extract SAML / SSO URIs from the logs that contain X11 as a user agent, so we can exclude SSO usernames from any machines that aren't running a unix flavor:</p>
+        <pre><code class="language-bash">grep -iE '.*X11;.*saml2/sso.*' logs.json > linux_saml.json</code></pre>
+        <p>Output: 125 SAML URIs from 94 unique IP addresses and users.</p>
+
+        <p>Using a monster of a one-liner instead of a few lines of Python (I was sick and not thinking quite right), we filter the SAML even further by the IP addresses we saw reach out to the Arch NTP server:</p>
+        <div class="scrollable-log">
+        <pre><code class="language-bash">IFS=',' read -ra ips <<< "10.17.161.10,10.17.171.253,10.17.26.247,10.17.6.47,10.17.90.14,10.18.21.121,10.34.192.28,10.35.126.228,10.49.220.32,10.49.65.21,10.49.79.62,10.50.103.29,10.50.184.143,10.51.64.145,10.65.228.127,10.65.26.90,10.65.68.160,10.66.156.255,10.66.68.75,10.66.91.95,10.67.252.116" && for ip in "${ips[@]}"; do grep "$ip" linux_saml.json; done</code></pre>
+        </div>
+        <p>Output:</p>
+        <div class="scrollable-log">
+        <pre><code class="language-json">{"host": "primary", "source": "udp:514", "sourcetype": "syslog", "_time": "2024-12-04 07:42:16.11", "data": {"_raw": "2024-12-04 07:42:16.058355||https://sso.evil-insurance.corp/idp/profile/SAML2/Redirect/SSO|/idp/profile/SAML2/Redirect/SSO|6be5e0fe638be3ae75c3702ae6f3fa91|authn/MFA|10.17.161.10|Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Firefox/53.0.3 Safari/537.3|https://sso.evil-insurance.corp/ns/profiles/saml2/sso/browser|mhammond||uid|gitlab.evil-insurance.corp|https://sso.evil-insurance.corp/idp/sso|url:oasis:names:tc:SAML:2.0:protocol|urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect|urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST|dxjj4bc2qh7nNYCxDufIMJUJgZg7XEC6stCo4dlJwt74i2KuXFbL6Qx3OJEOSOdnvea2zz6oK76KK2/9xWxJ0A==|urn:oasis:names:tc:SAML:2.0:nameid-format:transient|_2b0a5fe78da29cb3c501145bf54e92a5|2024-12-04 07:42:16.058355|_5cee657f-4daf-4b2f-bdaf-9bee0d9bc103||||urn:oasis:names:tc:SAML:2.0:status:Success|||false|false|true", "timestamp": "2024-12-04 07:42:16.058355", "xWxJ0A": "=|urn:oasis:names:tc:SAML:2.0:nameid-format:transient|_2b0a5fe78da29cb3c501145bf54e92a5|2024-12-04"}}
+{"host": "primary", "source": "udp:514", "sourcetype": "syslog", "_time": "2024-12-04 05:31:30.54", "data": {"_raw": "2024-12-04 05:31:29.304465||https://sso.evil-insurance.corp/idp/profile/SAML2/Redirect/SSO|/idp/profile/SAML2/Redirect/SSO|5430468a84a6a6b63c68a49e42f24275|authn/MFA|10.51.64.145|Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Firefox/53.0.3 Safari/537.3|https://sso.evil-insurance.corp/ns/profiles/saml2/sso/browser|acontreras2||uid|meetings.evil-insurance.corp|https://sso.evil-insurance.corp/idp/sso|url:oasis:names:tc:SAML:2.0:protocol|urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect|urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST|pctKS7XkclQzMdECw1+eu/VhrvlwDZjkNhKMcFsEFWjyxW36buimeNRMavUTAWb83aZ5ngkbZ5ByweVG0FlHKQ==|urn:oasis:names:tc:SAML:2.0:nameid-format:transient|_c32d5abb27783f04758e5894299096f4|2024-12-04 05:31:29.304465|_44f5c896-9a99-4e15-95fb-6c41f04c1ce8||||urn:oasis:names:tc:SAML:2.0:status:Success|||false|false|true", "timestamp": "2024-12-04 05:31:29.304465", "VhrvlwDZjkNhKMcFsEFWjyxW36buimeNRMavUTAWb83aZ5ngkbZ5ByweVG0FlHKQ": "=|urn:oasis:names:tc:SAML:2.0:nameid-format:transient|_c32d5abb27783f04758e5894299096f4|2024-12-04"}}
+{"host": "primary", "source": "udp:514", "sourcetype": "syslog", "_time": "2024-12-04 10:18:09.91", "data": {"_raw": "2024-12-04 10:18:08.976782||https://sso.evil-insurance.corp/idp/profile/SAML2/Redirect/SSO|/idp/profile/SAML2/Redirect/SSO|2d33d3cd963380d37bb220bdc945c980|authn/MFA|10.51.64.145|Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Firefox/53.0.3 Safari/537.3|https://sso.evil-insurance.corp/ns/profiles/saml2/sso/browser|acontreras2||uid|hr.evil-insurance.corp|https://sso.evil-insurance.corp/idp/sso|url:oasis:names:tc:SAML:2.0:protocol|urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect|urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST|JEK418ch88IQvEQTai3LIFsZoikWh6tMVU2yo0slelw6+4FlQ4zqqx2eNY4dcKOnahCwpggJDtSW+blZy08fpA==|urn:oasis:names:tc:SAML:2.0:nameid-format:transient|_d8af2b509e27067880c52462899fabfd|2024-12-04 10:18:08.976782|_1992e0b0-dcda-410c-8136-8e350bf8970b||||urn:oasis:names:tc:SAML:2.0:status:Success|||false|false|true", "timestamp": "2024-12-04 10:18:08.976782", "blZy08fpA": "=|urn:oasis:names:tc:SAML:2.0:nameid-format:transient|_d8af2b509e27067880c52462899fabfd|2024-12-04"}}</code></pre>
+        </div>
+        <p>We see two users here! <code>mhammond</code>, using IP <code>10.17.161.10</code>, and <code>acontreras2</code>, using IP <code>10.51.64.145</code>.</p>
+        <p>From here, I want to filter on the disconnects and successful authentications for each of these users - I'll then put that into our timeline. For brevity's sake, I started with <code>mhammond</code>, only including the most relevant events:</p>
+        <pre><code class="language-bash">grep -iE '((authentication|disconnect).*10.17.161.10)|(.*10.17.161.10.*(DHCPREQUEST|DHCPRELEASE|DHCPACK))' logs.json > 10-17-161-10_events.json</code></pre>
+        <p>Output (some relevant events, there are 58 total events in the one-liner output):</p>
+        <div class="scrollable-log">
+        <pre><code class="language-json">{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 08:45:31.83", "data": {"timestamp": "2024-12-04 08:45:30.896506", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "8E:BC:D0:56:E9:D6", "src_ip": "10.17.0.2", "src_port": 67, "dest_mac": "53:75:56:a7:98:8f", "dest_ip": "10.17.161.10", "dest_port": 68, "chaddr": "53:75:56:a7:98:8f", "ciaddr": "10.17.161.10", "transaction_id": 641194902, "opcode": "DHCPACK"}}
+{"host": "primary", "source": "udp:514", "sourcetype": "syslog", "_time": "2024-12-04 08:35:27.57", "data": {"_raw": "2024-12-04 08:45:33.555166 net-ctrl1 dot1x-proc:1[4406]: <522300> <4406> <INFO> <net-ctrl1 10.17.0.3> User disconnected. username=1021321009 ip=10.17.161.10 usermac=53:75:56:a7:98:8f authmethod=802.1x servername=cppm01-RADIUS serverip=10.17.0.3 apname=B1-W0 bssid=F4:2E:7F:FF:FB:EC", "timestamp": "2024-12-04 08:45:33.555166", "username": "1021321009", "ip": "10.17.161.10", "usermac": "53:75:56:a7:98:8f", "authmethod": "802.1x", "servername": "cppm01-RADIUS", "serverip": "10.17.0.3", "apname": "B1-W0", "bssid": "F4:2E:7F:FF:FB:EC"}}
+{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 09:42:01.53", "data": {"timestamp": "2024-12-04 09:42:00.907257", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "8E:BC:D0:56:E9:D6", "src_ip": "10.17.0.2", "src_port": 67, "dest_mac": "53:75:56:a7:98:8f", "dest_ip": "10.17.161.10", "dest_port": 68, "chaddr": "53:75:56:a7:98:8f", "ciaddr": "10.17.161.10", "transaction_id": 2426784686, "opcode": "DHCPACK"}}
+{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 09:51:03.70", "data": {"timestamp": "2024-12-04 09:51:02.958353", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "8E:BC:D0:56:E9:D6", "src_ip": "10.17.0.2", "src_port": 67, "dest_mac": "53:75:56:a7:98:8f", "dest_ip": "10.17.161.10", "dest_port": 68, "chaddr": "53:75:56:a7:98:8f", "ciaddr": "10.17.161.10", "transaction_id": 2426784686, "opcode": "DHCPACK"}}
+{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 10:05:29.46", "data": {"timestamp": "2024-12-04 10:05:28.681512", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "8E:BC:D0:56:E9:D6", "src_ip": "10.17.0.2", "src_port": 67, "dest_mac": "53:75:56:a7:98:8f", "dest_ip": "10.17.161.10", "dest_port": 68, "chaddr": "53:75:56:a7:98:8f", "ciaddr": "10.17.161.10", "transaction_id": 2426784686, "opcode": "DHCPACK"}}
+{"host": "primary", "source": "stream:dhcp", "sourcetype": "stream:dhcp", "_time": "2024-12-04 10:12:22.75", "data": {"timestamp": "2024-12-04 10:12:22.333422", "protocol_stack": "ip:udp:dhcp", "transport": "udp", "src_mac": "8E:BC:D0:56:E9:D6", "src_ip": "10.17.0.2", "src_port": 67, "dest_mac": "53:75:56:a7:98:8f", "dest_ip": "10.17.161.10", "dest_port": 68, "chaddr": "53:75:56:a7:98:8f", "ciaddr": "10.17.161.10", "transaction_id": 2426784686, "opcode": "DHCPACK"}}
+{"host": "primary", "source": "udp:514", "sourcetype": "syslog", "_time": "2024-12-04 09:41:57.11", "data": {"_raw": "2024-12-04 10:12:24.054146 net-ctrl1 dot1x-proc:1[4406]: <522300> <4406> <INFO> <net-ctrl1 10.17.0.3> User disconnected. username=1021321009 ip=10.17.161.10 usermac=53:75:56:a7:98:8f authmethod=802.1x servername=cppm01-RADIUS serverip=10.17.0.3 apname=B1-W3 bssid=F4:2E:7F:FC:30:CC", "timestamp": "2024-12-04 10:12:24.054146", "username": "1021321009", "ip": "10.17.161.10", "usermac": "53:75:56:a7:98:8f", "authmethod": "802.1x", "servername": "cppm01-RADIUS", "serverip": "10.17.0.3", "apname": "B1-W3", "bssid": "F4:2E:7F:FC:30:CC"}}</code></pre>
+        </div>
+
+        <p>Putting relevant events into table:</p>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Event</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>2024-12-04 08:45:33.555166</td>
+                    <td><code>10.17.161.10</code> (<code>mhammond</code>) disconnects from network</td>
+                    <td>releases <code>10.17.161.10</code> + pause in traffic from <code>10.17.161.10</code></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 08:49:20.52</td>
+                    <td><code>de:ad:be:ef:ca:fe</code> first requests IP assignment</td>
+                    <td>requests <code>10.18.21.121</code></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 08:49:20.982612</td>
+                    <td>first IP assignment to <code>de:ad:be:ef:ca:fe</code></td>
+                    <td>assigned <code>10.18.21.121</code></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 08:49:34.58</td>
+                    <td><code>10.18.21.121</code> requests <code>www.google.com</code></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 08:51:18.72</td>
+                    <td><code>10.18.21.121</code> requests <code>2.arch.pool.ntp.org</code></td>
+                    <td>device runs Arch!</td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 08:51:51.12</td>
+                    <td><code>10.18.21.121</code> requests <code>thepiratebay.org</code></td>
+                    <td>illicit domain</td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 09:05:01.12</td>
+                    <td><code>10.18.21.121</code> requests <code>generic-illicit-activities-hub.org</code></td>
+                    <td>illicit domain</td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 09:22:00.411200</td>
+                    <td><code>de:ad:be:ef:ca:fe</code> releases IP <code>10.18.21.121</code></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 09:22:00.519792</td>
+                    <td>last IP assignment to <code>de:ad:be:ef:ca:fe</code></td>
+                    <td>assigned <code>10.18.21.121</code></td>
+                </tr>
+                <tr>
+                    <td>2024-12-04 09:42:00.907257</td>
+                    <td>IP assignment to <code>10.17.161.10</code> (<code>mhammond</code>)</td>
+                    <td>traffic from <code>10.17.161.10</code> continues</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p>This makes much more sense now! We can see that <code>mhammond</code> is the likely user visiting those illicit sites! The flag is <code>irisctf{mhammond}</code></p>
+
+        <p>This challenge required slightly more nuanced log analysis knowledge, but overall the biggest change was the necessity of lateral thinking - in forensics, we're often presented with situations where we need to think creatively to solve a problem, even if what we find may not be definitive evidence to prove an event occurred how we think it did - in this case, we would likely collect an image and/or system artifacts from <code>mhammond</code>'s work machine to further prove illegitimate activity was performed using that device.</p>
+
+        <p>From an analyst's perspective, this was a very fun challenge to work on, and directly reflects the work I do professionally, which is a breath of fresh air compared to many CTF forensics challenges that model unique or impractical techniques compared to daily work. Best regards to Skat for this challenge :)</p>
+    </article>
+</body>
+</html>
