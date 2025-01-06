@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IrisCTF 2025 Writeups - Windy Day</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>IrisCTF 2025: Windy Day</h1>
+        <nav>
+            <ul>
+                <li><a href="/index.html">Home</a></li>
+                <li><a href="/ctf/ctf.html">CTF</a></li>
+                <li><a href="/projects/projects.html">Projects</a></li>
+                <li><a href="/articles/articles.html">Articles</a></li>
+            </ul>
+        </nav>
+    </header>
+    <article>
+        <h2>Challenge Name: Windy Day</h2>
+        <p>Category: Forensics</p>
+        <p>Author: @Skat</p>
+
+        <h3>Challenge Description:</h3>
+        <p>I have really bad memory. I was analyzing something but then lost track of an important note...</p>
+
+        <h3>Artifact Files:</h3>
+        <ul>
+            <li>memdump.mem</li>
+        </ul>
+
+        <p>Because the flag string isn't protected beyond b64, this CTF can be cheesed pretty easily with a one-liner using binary refinery:</p>
+        <pre><code class="language-bash">emit irisctf | b64 -R | snip :-3 | xargs -I {} grep -m 1 -iE '{}.*\=$' &lt;(strings -e l memdump.mem) | b64</code></pre>
+        <p>But I want to write up a more relevant solution in terms of memory analysis.</p>
+
+        <p>For this solution we'll be using volatility 2, but can also be easily accomplished using MemProcFS if you prefer that :)</p>
+
+        <h3>Step 1: Finding a Valid Profile</h3>
+        <p>To start, we'll use <code>imageinfo</code> to find a valid profile to pass to volatility when using plugins:</p>
+        <pre><code class="language-bash">vol.exe -f memdump.mem imageinfo</code></pre>
+        <p>Output:</p>
+        <img src="/ctf/iris2025/images/windy-day-img-1.png" alt="Image 1" />
+
+        <h3>Step 2: Analyzing Running Processes</h3>
+        <p>Then I'll look for running processes with <code>pstree</code>, this gives a clean output and shows which parent process we should dump for interesting running processes. I didn't notice any programs open that may be used to take notes down, but we do see firefox - maybe this will be related to searches or website visits:</p>
+        <pre><code class="language-bash">./vol.exe -f memdump.mem --profile Win10x64_14393 pstree</code></pre>
+        <p>Firefox output:</p>
+        <div class="scrollable-log">
+        <pre><code class="language-bash">0xffffe38cb818b500:firefox.exe                      3036   4060     89      0 2025-01-03 16:55:40 UTC+0000
+. 0xffffe38cb75b9080:firefox.exe                     3968   3036     22      0 2025-01-03 16:55:41 UTC+0000
+. 0xffffe38cb7e32680:firefox.exe                     7116   3036     19      0 2025-01-03 17:10:01 UTC+0000
+. 0xffffe38cb7e25080:firefox.exe                     2252   3036     19      0 2025-01-03 17:10:01 UTC+0000
+. 0xffffe38cbbc9e080:firefox.exe                     2920   3036     19      0 2025-01-03 17:09:56 UTC+0000
+. 0xffffe38cbb884800:firefox.exe                     6256   3036     19      0 2025-01-03 17:09:56 UTC+0000
+. 0xffffe38cbb539800:firefox.exe                     3828   3036     17      0 2025-01-03 16:55:43 UTC+0000
+. 0xffffe38cbba16080:firefox.exe                     2712   3036     19      0 2025-01-03 17:09:56 UTC+0000
+. 0xffffe38cbbbe8800:firefox.exe                     4508   3036     19      0 2025-01-03 17:09:59 UTC+0000
+. 0xffffe38cbbbb8080:firefox.exe                     4344   3036     19      0 2025-01-03 17:10:00 UTC+0000
+. 0xffffe38cbb380080:firefox.exe                     3624   3036      5      0 2025-01-03 16:55:41 UTC+0000
+. 0xffffe38cbb7c8800:firefox.exe                     5044   3036      5      0 2025-01-03 16:56:43 UTC+0000
+. 0xffffe38cbbb44080:firefox.exe                     2308   3036     19      0 2025-01-03 17:09:56 UTC+0000
+. 0xffffe38cbba94080:firefox.exe                     5324   3036     19      0 2025-01-03 17:09:52 UTC+0000
+. 0xffffe38cbb89e400:firefox.exe                      740   3036     19      0 2025-01-03 17:10:01 UTC+0000
+. 0xffffe38cbb8c0800:firefox.exe                     5196   3036     19      0 2025-01-03 17:09:56 UTC+0000
+. 0xffffe38cbb0d6300:firefox.exe                     4772   3036     18      0 2025-01-03 16:57:38 UTC+0000
+. 0xffffe38cbb8a9800:firefox.exe                     5288   3036     19      0 2025-01-03 17:09:56 UTC+0000
+. 0xffffe38cbb261080:firefox.exe                     5804   3036     19      0 2025-01-03 17:09:56 UTC+0000
+. 0xffffe38cbb116080:firefox.exe                     4076   3036     17      0 2025-01-03 16:55:45 UTC+0000
+. 0xffffe38cbb711800:firefox.exe                     2420   3036      5      0 2025-01-03 16:55:44 UTC+0000
+. 0xffffe38cbb8c6800:firefox.exe                     3328   3036     19      0 2025-01-03 17:09:56 UTC+0000
+. 0xffffe38cbb1e1080:firefox.exe                     3132   3036      5      0 2025-01-03 16:55:47 UTC+0000
+. 0xffffe38cbbc8c080:firefox.exe                      928   3036     19      0 2025-01-03 17:10:00 UTC+0000
+. 0xffffe38cbb7c9080:firefox.exe                     5664   3036     19      0 2025-01-03 17:09:56 UTC+0000
+. 0xffffe38cbbca0080:firefox.exe                     3124   3036     19      0 2025-01-03 17:10:01 UTC+0000</code></pre>
+        </div>
+        <h3>Step 3: Dumping Memory of Firefox</h3>
+        <p>To test our theory, let's dump the memory of the firefox parent process using <code>memdump</code>, and check for interesting strings:</p>
+        <pre><code class="language-bash">./vol.exe -f memdump.mem --profile Win10x64_14393 memdump -p 3036 -D .</code></pre>
+        <p>Output:</p>
+        <img src="/ctf/iris2025/images/windy-day-img-2.png" alt="Image 2" />
+
+        <p>Looking through the strings, I didn't see much interesting http traffic (outside of some datacenter IPs), but saw a lot of https traffic, so I carved those out to a file to look through. We use the <code>-e l</code> flag for <code>strings</code> because these are UTF-16 encoded strings, and a regular <code>strings</code> search wasn't producing proper results:</p>
+        <pre><code class="language-bash">strings -e l 3036.dmp | grep '^https://' | sort -u &gt; firefox_sites.txt</code></pre>
+        <p>Output:</p>
+        <img src="/ctf/iris2025/images/windy-day-img-3.png" alt="Image 3" />
+
+        <p>Bingo! We can quickly convert the largest b64 string we see and find the flag:</p>
+        <pre><code class="language-bash">grep -oP 'google\.com/.*q=\K.*%3D' firefox_sites.txt | snip :-3 | b64</code></pre>
+        <p>Output:</p>
+        <img src="/ctf/iris2025/images/windy-day-img-4.png" alt="Image 4" />
+
+        <h3>Flag:</h3>
+        <p><strong>irisctf{i_am_an_idiot_with_bad_memory}</strong></p>
+
+        <h3>Additional Findings:</h3>
+        <p>Couple of Easter Eggs / Additional findings below :)</p>
+        <ul>
+            <li>Trojan malware being analyzed was <code>fee.exe</code> from <a href="https://github.com/Alexuiop1337/Trojan-Downloader">GitHub</a></li>
+            <li>Not sure if <code>fee.exe</code> was saved as <code>rickroll.exe</code> in <code>Users\ADMINI~1\DOWNLO~1\rickroll.exe</code>, but that exists ;)</li>
+            <img src="/ctf/iris2025/images/windy-day-rickroll.png" alt="Rickroll Image" />
+        </ul>
+        <p>Strings from interesting memory regions which may or may not be related to the malware Skat was checking out:</p>
+        <ul>
+            <li><code>http://179[.]188.38.42/</code> (some accreditation site related to Araçariguama brazil)</li>
+            <li><code>destip=42[.]112.25.208;</code> (Vietnam, Fixed line ISP)</li>
+            <li><code>destip=42[.]0.29.32;</code> (Malaysia, DataCenter)</li>
+            <li><code>unzip.exe</code> (likely trojan payload)</li>
+            <li><code>$TROJANPATH = @TEMPDIR & "\" & "$TROJANKEY = "$FULSCPT = FILEOPEN ( $TROJANPATH , 0 )$S_ENCRYPTPASSWORD = "ioiooiioioio"$OPCODE = "0x89C04150535657524889CE4889D7FCB2</code> (trojan-related ps1)</li>
+            <li><code>office287@gmail.com</code> (??? )</li>
+            <li><code>info@theadvertiser.biz</code> (??? )</li>
+            <li><code>RVRmMmQa1EYo</code> (partial base?)</li>
+            <li><code>aJK0fI8NaUTOUM6NacH5aYdBrIvPNsazb7IUXz2aQa</code> (partial base?)</li>
+            <li><code>x.bat</code></li>
+            <li><code>certutil</code> usage</li>
+            <li><code>mshta</code> usage</li>
+            <li><code>U29mdHdhcmVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXFJ1bg==</code> (Software\\Microsoft\\Windows\\CurrentVersion\\Run)</li>
+            <li><code>i do not want</code></li>
+            <li><code>donate</code></li>
+            <li><code>http://forum.ru-board.com</code></li>
+            <li><code>https://money.yandex.ru</code></li>
+        </ul>
+    </article>
+    <footer>
+        <p>&copy; 2025 Team Bytesized. All rights reserved.</p>
+    </footer>
+</body>
+</html>
